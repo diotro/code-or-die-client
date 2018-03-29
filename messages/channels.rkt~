@@ -1,0 +1,68 @@
+#lang racket
+
+(provide broadcast receive)
+
+(require redis
+         json)
+
+;; TODO:
+;; - what is a schema?
+;; - implement schema checking
+;; - allow setting of schemas
+;; - implement schema->string
+
+(define WARNING-CHANNEL-NAME "info:warnings")
+
+
+;; broadcast : String JSExpr -> Integer
+;; Puts the given data in the given channel
+(define (broadcast channel data)
+  (ensure-meets-schema channel data)
+  (warn-if-channel-full channel)
+  (RPUSH channel data))
+
+
+;; receive : String [Int] -> [Maybe JSExpr]
+;; returns a jsexpr if there is one. Blocks for the given wait time,
+;; or three seconds if none is provided
+(define (receive channel [wait 3])
+  (define response (BLPOP channel wait))
+  ; If there is no result, return #f, otherwise convert
+  ; the bytes to json
+  (if (not response)
+      #f
+      (bytes->jsexpr (second response))))
+
+
+
+;; ensure-meets-schema : String JSExpr -> Boolean
+;; checks if the schema of the given channel matches the given JSExpr
+(define (ensure-meets-schema channel data)
+  (define schema (get-schema channel))
+  (when (not (meets-schema? data schema))
+      (raise-argument-error 'data (schema->string schema) data)))
+
+
+;; get-schema : String -> Schema
+;; gets the schema for the given chanel
+(define (get-schema channel)
+  #f)
+
+
+;; warn-if-channel-full : String -> Void
+;; emites a warning of the given channel has too many unprocessed messages
+(define (warn-if-channel-full channel)
+  (when (> (LLEN channel) 1000)
+    (PUBLISH WARNING-CHANNEL-NAME (format "channel ~a has too many messages" channel))))
+
+
+;; meets-schema? : JSExpr Schema -> Boolean
+;; does the given value meet the given schema?
+(define (meets-schema? data schema)
+  #t)
+
+
+;; schema->string : Schema -> String
+;; converts the given schema to a string representation
+(define (schema->string schema)
+  "schema")
