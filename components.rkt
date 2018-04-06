@@ -1,17 +1,19 @@
 #lang racket
-(provide
- 
- make-pipeline)
-
-
 (require "messages.rkt")
-(provide message-broker-hostnames
+
+(provide make-pipeline
+         message-broker-hostnames
          clear-channels!)
+
 
 (module+ test
   (require rackunit))
 
 
+;; (list [-> X1] [X1 -> X2] [X2 -> X3] .... [Xn -> Void]) -> [List-of component%]
+;; Takes a list of functions, the first having no input, the rest taking
+;; the output of the previous as input, and produces a pipeline of components
+;; that communicate using redis.
 (define (make-pipeline . inputs)
   (make-object pipeline% inputs))
 
@@ -22,7 +24,8 @@
   (sleep 1)
   (send pipe stop!)
   (check-equal? PIPELINE-OUT 5))
-                 
+
+
 (define pipeline%
   (class object%
     (super-new)
@@ -30,47 +33,51 @@
     (init pipes)
     (field [components (apply pipes->components pipes)])
 
+    
     ;; running-thread : [Maybe ThreadDescriptor]
     ;; represents the current thread the component is running in
-    (field [running-thread #f])
+    (field [running-threads '()])
 
+    
     ;; run! : -> Void
     ;; starts each component in this pipeline
-    (define/public (run! [delay .5])
+    (define/public (run! [delay .1])
       (stop!)
+      (define broker (message-broker))
 
-      (define (go)
-        (for-each (λ (component) (send component init!)) components)
-        (let loop ()
-          (for-each (λ (component) (send component tick!)) components)
-          (sleep delay)
-          (loop)))
+      (define (thread-go component)
+        (thread
+         (thunk
+          (message-broker-hostnames (list broker))
+          (send component init!)
+          (let loop ()
+            (send component tick!)
+            (sleep delay)
+            (loop)))))
       
-      (set! running-thread (thread go)))
+      (set! running-threads (map thread-go components)))
+
     
     ;; stop! : -> Void
     ;; stops the data from flowing
     (define/public (stop!)
-      (when running-thread
-        (kill-thread running-thread))
-      (set! running-thread #f))
+      (for-each (λ (component) (send component stop!)) components)
+      (for-each kill-thread running-threads)
+      (set! running-threads '()))
     ))
 
-
-;; (list [-> X1] [X1 -> X2] [X2 -> X3] .... [Xn -> Void]) -> [List-of component%]
-;; Takes a list of functions, the first having no input, the rest taking
-;; the output of the previous as input, and produces a pipeline of components
-;; that communicate using redis.
 (define (pipes->components . pipeline)
   (define input (first pipeline))
   (define output (last pipeline))
+  ;; remove input and output
   (define pipes (reverse (rest (reverse (rest pipeline)))))
   
 
   ;; [->] [List-of [->]] [->]  ->  [List-of component%]
   (define (assemble-pipeline input pipes output)
-    (cond [(empty? (rest pipes))
-           (list (make-component input (first pipes) output))]
+    (cond [(empty? pipes)
+           (list (make-component input identity output))]
+          [(empty? (rest pipes)) (list (make-component input (first pipes) output))]
           [else
            (define cur-out (random-message-channel-name))
            (cons (make-component input (first pipes) cur-out)
@@ -139,13 +146,19 @@
     ;; tick! : -> Void
     ;; runs one step of the operation of this component
     (define/public (tick!)
-      (call-with-values
-       input
-       (λ data
-         (for-each (λ (next-data) 
+      
+         #;(for-each (λ (next-data) 
                      (call-with-values (thunk (operation next-data))
                                        (λ data (for-each (λ (d) (output d)) data))))
-                   data))))
+                   data)
+      
+      (call-with-values
+         input
+         (λ data
+           (for-each (λ (next-data) 
+                       (call-with-values (thunk (operation next-data))
+                                         (λ data (for-each (λ (d) (output d)) data))))
+                     data))))
     ))
 
 

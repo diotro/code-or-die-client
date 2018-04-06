@@ -1,1 +1,0 @@
-("6.11" ("a4d612dc754c6e3356eb49136ff6ddce1bc764c8" . "23872dd79a021c2977cc416b34fbee0d4ea0e842") (collects #"client" #"messages.rkt") (collects #"errortrace" #"errortrace-key.rkt") (collects #"racket" #"main.rkt") (collects #"racket" #"runtime-config.rkt") (collects #"rackunit" #"main.rkt"))
