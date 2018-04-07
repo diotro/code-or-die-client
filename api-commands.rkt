@@ -69,11 +69,11 @@
 (def-api get-ships GET "/ships" () [listof [hash/c any/c any/c]])
 (def-api get-ship GET "/ship/~a" (ship-id/c) ship-info/c)
 
-(def-api get-ship-orders GET "/ships/~a/orders" (ship-id/c) [listof ship-order/c])
-(def-api add-ship-order PUT "/ships/~a/orders" (ship-id/c ship-order/c))
-(def-api set-ship-orders POST  "/ships/~a/orders" (ship-id/c [listof ship-order/c]))
-(def-api delete-ship-orders DELETE "/ships/~a/orders" (ship-id/c))
-(def-api delete-ship-order-at DELETE "/ships/~a/orders/~a" (ship-id/c integer?))
+(def-api get-ship-orders GET "/ship/~a/orders" (ship-id/c) [listof ship-order/c])
+(def-api add-ship-order PUT "/ship/~a/orders" (ship-id/c ship-order/c))
+(def-api set-ship-orders POST  "/ship/~a/orders" (ship-id/c [listof ship-order/c]))
+(def-api delete-ship-orders DELETE "/ship/~a/orders" (ship-id/c))
+(def-api delete-ship-order-at DELETE "/ship/~a/orders/~a" (ship-id/c integer?))
 
 ;; ---------------------------------------------------------------------------------------------------
 ;; Utility functions

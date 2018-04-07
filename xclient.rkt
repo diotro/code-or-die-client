@@ -25,9 +25,9 @@
 
 #;
 (message-broker-hostnames '(("localhost" 6379)
-                            ("localhost" 6370)
-                            ("localhost" 6371)
-                            ("localhost" 6372)))
+                            ("localhost" 6380)
+                            ("localhost" 6381)
+                            ("localhost" 6382)))
 
 (define PIPELINES
   (list (make-pipeline api->system-ids
@@ -41,12 +41,33 @@
         (make-pipeline api->ship-ids
                        ship-id->ship-info
                        ship-info->db)
+        
+        (make-pipeline db->ship-info
+                       list
+                       (->+ first ship-info->system-info)
+                       (->+ second system-info->routes)
+                       ship+system+routes->target+ship-orders
+                       (fork (handle first conquer-attempt->db)
+                             (handle second (curry map ship-order->api))))
         ))
 
 
 
-
 (for-each (λ (pipeline) (send pipeline run!)) PIPELINES)
-(sleep 3)
+(sleep 10)
 (for-each (λ (pipeline) (send pipeline stop!)) PIPELINES)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 

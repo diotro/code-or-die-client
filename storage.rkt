@@ -21,17 +21,18 @@
 
 
 
-(define current-mongo (make-parameter (list "localhost" 27017 "code-or-die-test")
-                                      (λ (mongo)
-                                        (unless (and (list? mongo)
-                                                     (= (length mongo) 3)
-                                                     (string? (first mongo))
-                                                     (integer? (second mongo))
-                                                     (string? (third mongo)))
-                                          (raise-argument-error 'mongo
-                                                                "list of hostname, port, and db name"
-                                                                mongo))
-                                        mongo)))
+(define current-mongo
+  (make-parameter (list "localhost" 27017 "code-or-die-test")
+                  (λ (mongo)
+                    (unless (and (list? mongo)
+                                 (= (length mongo) 3)
+                                 (string? (first mongo))
+                                 (integer? (second mongo))
+                                 (string? (third mongo)))
+                      (raise-argument-error 'mongo
+                                            "list of hostname, port, and db name"
+                                            mongo))
+                    mongo)))
 
 
 (define (clear-storage!)
@@ -40,25 +41,37 @@
 ;; store! : String BSONDocument -> Void
 ;; stores the given BSONDocument in the given collection
 (define (store! collection value)
-  (when value
-    (call-with-mongo-collection
-     collection
-     (λ (mongo) (mongo-collection-repsert! mongo
-                                           (hash 'id (hash-ref value 'id))
-                                           value)))))
+  (call-with-mongo-collection
+   collection
+   (λ (mongo)
+     (if (hash-has-key? value 'id)
+         (mongo-collection-repsert! mongo (hash 'id (hash-ref value 'id)) value)
+         (mongo-collection-insert! mongo value)))))
 
 
 ;; find-stored : String BSONDocument -> [Listof BSONDocument]
-(define (find-stored collection query)
-  (call-with-mongo-collection
-   collection
-   (λ (coll) (mongo-collection-find coll query
-                                    ; don't include _id field
-                                    #:selector (hash '_id 0)))))
+(define (find-stored collection [query (hash)])
+  (define s
+    (call-with-mongo-collection
+     collection
+     (λ (coll) (mongo-collection-find coll query
+                                      ; don't include _id field
+                                      #:selector (hash '_id 0)))))
+
+  (define (hash-vec->list h)
+    (for/fold ([out (hash)])
+              ([(key value) (in-hash h)])
+      (define l-value
+        (cond [(vector? value) (vector->list value)]
+              [(hash? value) (hash-vec->list value)]
+              [else value]))
+      (hash-set out key l-value)))
+  
+  (map hash-vec->list (sequence->list s)))
 
 
 ;; find-single-stored : String BSONDocument -> [Maybe BSONDocument]
-(define (find-single-stored collection query)
+(define (find-single-stored collection [query (hash)])
   (define result (find-stored collection query))
   (if (cons? result)
       (first result)
@@ -67,11 +80,11 @@
 
 (module+ test
   (current-mongo '("localhost" 27017 "test-test-test-test-test"))
-  #;(clear-storage!)
+  (clear-storage!)
   
   (define TEST-COL "test-for-code-or-die")
-  (sleep 1)
   (store! TEST-COL (hasheq 'id 1 'val 3))
+  (sleep .3)
   (check-equal? (hash-ref (find-single-stored TEST-COL (hash 'val 3)) 'id) 1)
 
   (store! TEST-COL (hasheq 'id 2 'val 3))

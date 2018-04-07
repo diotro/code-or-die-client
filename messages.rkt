@@ -8,6 +8,9 @@
 
          clear-channels!
          list-all-channels
+
+         broadcast
+         receive
          )
 
 (require redis
