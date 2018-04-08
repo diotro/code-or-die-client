@@ -75,15 +75,20 @@
 (define (->channel c)
   (void (curry broadcast c)))
 
+;; channel-> : String -> [-> Any]
+;; reads input from the given channel
+(define (channel-> c)
+  (curry receive c))
 
-;; ->filter : [X -> Y] -> [X -> [Or X (values)]
-(define (->filter predicate)
-  (λ (x) (if (predicate x) x (values))))
+
+;; ->filter-> : [X -> Y] -> [X -> [Or X (values)]
+(define (->filter-> predicate?)
+  (λ (x) (if (predicate? x) x (values))))
 
 
-;; log : String [X -> Y] -> [X -> Y]
+;; ->log-> : String [X -> Y] -> [X -> Y]
 ;; logs the input to the given channel, then applies the function
-(define (log c [func identity])
+(define (->log-> c [func identity])
   (λ input (broadcast c input) (apply func input)))
 
 ;; ---------------------------------------------------------------------------------------------------
@@ -106,7 +111,7 @@
 ;; finds all available informatino on the given system
 (define (system-id->system-info system)
   (define detail (get-system-info system))
-  (if (symbol? detail) (values) (values detail)))
+  (if (symbol? detail) (values) detail))
 
 
 
@@ -121,6 +126,11 @@
 (define (ship-id->ship-orders id)
   (hash-ref (get-ship id) 'orders))
 
+;; Ship -> Boolean
+;; does the given ship have any orders?
+(define (no-ship-orders? ship-info)
+  ;; sometimes '() gets entered as #hash(), so check cons case
+  (not (cons? ship-info)))
 
 ;; Ship -> System
 ;; finds information on the system the given ship is currently located at
@@ -140,7 +150,9 @@
 (define (routes->routes-not-owned routes)
   (filter (λ (r)
             (define sys (id->retrieve-single-system-info (hash-ref r 'destination)))
-            (if sys (string=? (hash-ref sys 'controller) (current-civ-name)) #t))
+            (if (not sys) #t
+                (and (string? (hash-ref sys 'controller))
+                     (not (string=? (hash-ref sys 'controller) (current-civ-name))))))
           routes))
 
 
@@ -149,12 +161,13 @@
 ;; orders that will command the given ship to conquer the given system
 (define (ship+system+routes->target+ship-orders data)
   (match-define (list ship system routes) data)
-  (define target (hash-ref (list-ref routes (random (length routes))) 'destination))
-  (define ship-id (hash-ref ship 'id))
+  (cond [(empty? routes) (values)]
+        [else (define target (hash-ref (list-ref routes (random (length routes))) 'destination))
+              (define ship-id (hash-ref ship 'id))
   
-  (define move-order (hasheq 'order "ftl" 'destination target 'id ship-id))
-  (define seize-order (hasheq 'order "seize" 'id ship-id))
-  (list (hash 'target target) (list move-order seize-order)))
+              (define move-order (hasheq 'order "ftl" 'destination target 'id ship-id))
+              (define seize-order (hasheq 'order "seize" 'id ship-id))
+              (list (hash 'target target) (list move-order seize-order))]))
 
 
 ;; ---------------------------------------------------------------------------------------------------

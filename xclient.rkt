@@ -1,11 +1,6 @@
 #lang racket
-
 (require "components.rkt"
          "operations.rkt")
-
-
-
-
 
 (current-api-key "one")
 (current-civ-name "one")
@@ -37,11 +32,11 @@
 
    ;; extract information on ships, send them to conquer adjacent systems
    (make-pipeline db->ship-info
+                  (->filter-> no-ship-orders?)
+                  (->log-> "ships")
                   (->+ identity ship-info->system-info place-last)
                   (->+ second system-info->routes place-last)
-                  (log "before-filter")
                   (->+ third routes->routes-not-owned (replace third))
-                  (log "data")
                   ship+system+routes->target+ship-orders
                   (fork (handle first #:do conquer-attempt->db)
                         (handle second #:do ship-orders->api)))
