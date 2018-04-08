@@ -33,11 +33,9 @@
     (init pipes)
     (field [components (apply pipes->components pipes)])
 
-    
     ;; running-thread : [Maybe ThreadDescriptor]
     ;; represents the current thread the component is running in
     (field [running-threads '()])
-
     
     ;; run! : -> Void
     ;; starts each component in this pipeline
@@ -146,19 +144,12 @@
     ;; tick! : -> Void
     ;; runs one step of the operation of this component
     (define/public (tick!)
+      (define cwv call-with-values)
+      (define (process item)
+        (cwv (thunk (operation item))
+             (λ data (for-each output data))))
       
-         #;(for-each (λ (next-data) 
-                     (call-with-values (thunk (operation next-data))
-                                       (λ data (for-each (λ (d) (output d)) data))))
-                   data)
-      
-      (call-with-values
-         input
-         (λ data
-           (for-each (λ (next-data) 
-                       (call-with-values (thunk (operation next-data))
-                                         (λ data (for-each (λ (d) (output d)) data))))
-                     data))))
+      (cwv input (λ data (for-each process data))))
     ))
 
 

@@ -1,18 +1,23 @@
 #lang racket
 
 (provide
+
+ 
+ ;; current-mongo : [Parameter (list String Number String)]
  current-mongo
 
- ;; String -> Void
+ ;; clear-storage : -> Void
  clear-storage!
  
- ;; String BSONDocument -> Void
- store!
-
- ;; String BSONDocument -> BSONDocument
- find-stored
-
- find-single-stored)
+ ;; (register-collection id pk [id ....])
+ ;; registers the first collection, with accompanying functions:
+ ;; "id"->db
+ ;; db->"id"
+ ;; db->single-"id"
+ ;; For each key:
+ ;;  - key->retrieve-"id"
+ ;;  - key->retrieve-single-"id"
+ register-collection)
 
 
 (require db/mongodb)
@@ -20,7 +25,7 @@
   (require rackunit))
 
 
-
+;; [Parameter (list String Number String)]
 (define current-mongo
   (make-parameter (list "localhost" 27017 "code-or-die-test")
                   (λ (mongo)
@@ -29,35 +34,77 @@
                                  (string? (first mongo))
                                  (integer? (second mongo))
                                  (string? (third mongo)))
-                      (raise-argument-error 'mongo
-                                            "list of hostname, port, and db name"
-                                            mongo))
+                      (raise-argument-error
+                       'mongo "(list hostname port db-name)" mongo))
                     mongo)))
 
 
+
+(define-syntax (register-collection stx)
+  (syntax-case stx ()
+    [(_ coll pk [keys ...])
+     (let ([make-id (λ (template . ids)
+                      (let ([template (apply format template (map syntax->datum ids))])
+                        (datum->syntax stx (string->symbol template))))])
+       (with-syntax ([c (symbol->string (syntax->datum #'coll))]
+                     [id->db (make-id "~a->db" #'coll)]
+                     [db->id (make-id "db->~a" #'coll)]
+                     [db->single-id (make-id "db->single-~a" #'coll)]
+                     )
+         #`(begin (define id->db (curry store! c #'pk))
+                  (define db->id
+                    (λ () (apply values (sequence->list (find-stored c)))))
+                  (define db->single-id (curry find-single-stored c))
+                  #,@(map (λ (x) #`(define #,(make-id "~a->retrieve-~a" x #'coll)
+                                     (λ (v) (apply values
+                                                 (sequence->list
+                                                  (find-stored-by c '#,x v))))))
+                          (cons #'pk (syntax->list #'(keys ...))))
+                  #,@(map (λ (x) #`(define #,(make-id "~a->retrieve-single-~a" x #'coll)
+                                     (curry find-single-stored-by c '#,x)))
+                          (cons #'pk (syntax->list #'(keys ...))))
+                  )))]))
+
+
+
+(module+ test
+  (current-mongo (list "localhost" 27017 "testtestasdfaksjdl"))
+  (clear-storage!)
+  (register-collection c id [])
+  (c->db (hash 'id 3))
+  (check-equal? (first (call-with-values db->c list)) (hash 'id 3))
+  (define c1 (id->retrieve-c 3))
+  (check-equal? c1 (hash 'id 3)))
+
+;; -> Void
+;; clears the current database
 (define (clear-storage!)
   (call-with-mongo! mongo-db-drop))
 
-;; store! : String BSONDocument -> Void
+
+
+;; store! : String Symbol BSONDocument -> Void
 ;; stores the given BSONDocument in the given collection
-(define (store! collection value)
+(define (store! collection pk value)
   (call-with-mongo-collection
    collection
    (λ (mongo)
-     (if (hash-has-key? value 'id)
-         (mongo-collection-repsert! mongo (hash 'id (hash-ref value 'id)) value)
+     (if (hash-has-key? value pk)
+         (mongo-collection-repsert! mongo (hash pk (hash-ref value pk)) value)
          (mongo-collection-insert! mongo value)))))
 
 
-;; find-stored : String BSONDocument -> [Listof BSONDocument]
+;; find-stored : String BSONDocument -> [Listof JSExpr]
 (define (find-stored collection [query (hash)])
-  (define s
+  (define found
     (call-with-mongo-collection
      collection
-     (λ (coll) (mongo-collection-find coll query
-                                      ; don't include _id field
-                                      #:selector (hash '_id 0)))))
-
+     (λ (coll)
+       (with-handlers ([exn:fail? (λ (x) empty-stream)])
+       (mongo-collection-find coll query
+                              ; don't include _id field
+                              #:selector (hash '_id 0))))))
+  
   (define (hash-vec->list h)
     (for/fold ([out (hash)])
               ([(key value) (in-hash h)])
@@ -67,15 +114,23 @@
               [else value]))
       (hash-set out key l-value)))
   
-  (map hash-vec->list (sequence->list s)))
+  (sequence-map hash-vec->list found))
 
 
 ;; find-single-stored : String BSONDocument -> [Maybe BSONDocument]
 (define (find-single-stored collection [query (hash)])
   (define result (find-stored collection query))
-  (if (cons? result)
-      (first result)
-      #f))
+  (if (stream-empty? result) #f (stream-first result)))
+
+
+;; find-by : String Symbol JSExpr -> [Listof BSONDocument]
+(define (find-stored-by collection key value)
+  (find-stored collection (hash key value)))
+
+
+;; find-single-by : String Symbol JSExpr -> [Maybe BSONDocument]
+(define (find-single-stored-by collection key value)
+  (find-single-stored collection (hash key value)))
 
 
 (module+ test
@@ -83,14 +138,16 @@
   (clear-storage!)
   
   (define TEST-COL "test-for-code-or-die")
-  (store! TEST-COL (hasheq 'id 1 'val 3))
+  (store! TEST-COL 'id (hasheq 'id 1 'val 3))
   (sleep .3)
-  (check-equal? (hash-ref (find-single-stored TEST-COL (hash 'val 3)) 'id) 1)
+  (check-equal? (stream-length (find-stored TEST-COL (hash 'val 3))) 1)
+  (check-true (hash? (find-single-stored TEST-COL (hash 'val 3))))
 
-  (store! TEST-COL (hasheq 'id 2 'val 3))
-  (check-equal? (length (find-stored TEST-COL (hash 'val 3))) 2)
+  (store! TEST-COL 'id  (hasheq 'id 2 'val 3))
+  (check-equal? (stream-length (find-stored TEST-COL (hash 'val 3))) 2)
   
   (call-with-mongo-collection! TEST-COL mongo-collection-drop!))
+
 
 ;;---------------------------------------------------------------------------------------------------
 ;; Helper Functions
