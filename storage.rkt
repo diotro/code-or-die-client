@@ -1,8 +1,6 @@
 #lang racket
 
 (provide
-
- 
  ;; current-mongo : [Parameter (list String Number String)]
  current-mongo
 
@@ -51,10 +49,10 @@
                      [db->id (make-id "db->~a" #'coll)]
                      [db->single-id (make-id "db->single-~a" #'coll)]
                      )
-         #`(begin (define id->db (curry store! c #'pk))
-                  (define db->id
-                    (λ () (apply values (sequence->list (find-stored c)))))
-                  (define db->single-id (curry find-single-stored c))
+         #`(begin (define (id->db value) (store! c #'pk value))
+                  (define (db->id)
+                    (apply values (sequence->list (find-stored c))))
+                  (define (db->single-id id) (find-single-stored c id))
                   #,@(map (λ (x) #`(define #,(make-id "~a->retrieve-~a" x #'coll)
                                      (λ (v) (apply values
                                                  (sequence->list

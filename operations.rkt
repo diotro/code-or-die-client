@@ -13,18 +13,20 @@
          current-api-location
          current-civ-name)
 
+
 ;; ---------------------------------------------------------------------------------------------------
 ;; Higher Order operations
 
 ;; ->+ : [X -> Y] [Y -> Z] [X Z -> R] -> [X -> R]
-;; applies the firs two functions to the input data to get a result.
-;; combines the result with the original input to output
+;; applies the first two functions to the input data to get a result.
+;; combines the result with the original input
 (define (->+ selector processor combinator)
-  (λ (input)
-    (define out
-      (call-with-values (thunk (processor (selector input)))
-                        (λ v (map (λ (x) (combinator input x)) v))))
-    (apply values out)))
+  (copy-name processor
+             (λ (input)
+               (define out
+                 (call-with-values (thunk (processor (selector input)))
+                                   (λ v (map (λ (x) (combinator input x)) v))))
+               (apply values out))))
 
 (module+ test
   (define ADD1-LIST (->+ identity add1 list))
@@ -51,29 +53,47 @@
   (check-equal? ((replace third) '(1 2 3 4 5) 7) '(1 2 7 4 5)))
 
 
+;; parallel : Integer [X -> Y] : (list N [X -> Y])
+;; uses n components in parallel to perform op
+(define (parallel n op)
+  (list n op))
+
 ;; fork : [List-of [X -> Void]] -> [X -> Void]
 ;; applies each handler to the given input
 (define (fork . handlers)
-  (λ (input) (for-each (λ (h) (h input)) handlers)))
+  (define name (for/fold ([name "fork:"])
+                         ([handler handlers])
+                 (string-append name "/"
+                                (symbol->string (object-name handler)))))
+  (procedure-rename (λ (input) (for-each (λ (h) (h input)) handlers))
+                    (string->symbol name)))
 
 
 ;; handle : [X -> Y] [List-of [Y -> Void]] -> [X -> Void]
 ;; produces a function that accepts an X, transforms it to a Y, then
 ;; applies each of the processors
 (define (handle #:do processor . transformers)
-  (λ (input)
-    (processor ((apply compose (reverse transformers)) input))))
+  (define name (for/fold ([name (string-append "handle:"
+                                               (symbol->string (object-name processor))
+                                               ":")])
+                         ([t transformers])
+                 (string-append name "/"
+                                (symbol->string (object-name t)))))
+  (procedure-rename (λ (input)
+                      (processor ((apply compose (reverse transformers)) input)))
+                    (string->symbol name)))
 
 
 ;; every : Number [X -> Y] -> [X -> Y]
 (define (every seconds func)
-  (λ args (sleep seconds) (apply func args)))
+  (copy-name func (λ args (sleep seconds) (apply func args))))
 
 
 ;; ->channel : String -> [Any -> Void]
 ;; outputs the given data to the given channel
 (define (->channel c)
-  (void (curry broadcast c)))
+  (procedure-rename (λ (x) (void (broadcast c x)))
+                    (string->symbol (string-append "to-channel:" c))))
 
 ;; channel-> : String -> [-> Any]
 ;; reads input from the given channel
@@ -83,13 +103,21 @@
 
 ;; ->filter-> : [X -> Y] -> [X -> [Or X (values)]
 (define (->filter-> predicate?)
-  (λ (x) (if (predicate? x) x (values))))
+  (procedure-rename (λ (x) (if (predicate? x) x (values)))
+                    (string->symbol (string-append "filter:"
+                                                   (symbol->string (object-name predicate?))))))
 
 
 ;; ->log-> : String [X -> Y] -> [X -> Y]
 ;; logs the input to the given channel, then applies the function
 (define (->log-> c [func identity])
-  (λ input (broadcast c input) (apply func input)))
+  (procedure-rename (λ input (broadcast c input) (apply func input))
+                    (string->symbol (string-append "log:" c))))
+
+;; procedure? procedure? -> procedure?
+;; gives the second function the name of the first function
+(define (copy-name f1 f2)
+  (procedure-rename f2 (object-name f1)))
 
 ;; ---------------------------------------------------------------------------------------------------
 ;; Inputs
@@ -173,18 +201,16 @@
 ;; ---------------------------------------------------------------------------------------------------
 ;; DB Operations
 
-(register-collection system-info id [])
+(register-collection system-info id [armies routes])
 (register-collection ship-info id [])
 (register-collection conquer-attempt target [])
 
 
 (define (system-info->build-order system-info)
-  (define production (hash-ref system-info 'production))
-      
   (hasheq 'id (hash-ref system-info 'id)
           'civ (current-civ-name)
           'order "build"
-          'count production))
+          'count (hash-ref system-info 'production)))
 
 
 ;; ---------------------------------------------------------------------------------------------------

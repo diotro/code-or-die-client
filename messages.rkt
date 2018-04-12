@@ -11,6 +11,7 @@
 
          broadcast
          receive
+         queue-length
          )
 
 (require redis
@@ -62,6 +63,11 @@
        (message-broker-hostnames)))
 
 
+(define (queue-length channel)
+  (if (string? channel)
+      (LLEN channel)
+      (void)))
+
 ;; [#:channel String] -> [ -> ]
 ;; given a channel name (or generating one randomly),
 ;; returns a function that:
@@ -69,12 +75,12 @@
 ;;  - if called on 1 argument will broadcast data to that argument
 (define (random-message-channel #:channel [channel (random-message-channel-name)])
   (define host (message-broker))
-  (define conn (connect #:host (first host) #:port (second host)))
-  (define (process . data)
-    (cond
-      [(empty? data) (or (receive channel #:redis conn #:default #f) (values))]
-      [(empty? (rest data)) (broadcast channel (first data) #:redis conn)]))
-  process)
+    (define conn (connect #:host (first host) #:port (second host)))
+    (define (process . data)
+      (cond
+        [(empty? data) (or (receive channel #:redis conn #:default #f) (values))]
+        [(empty? (rest data)) (broadcast channel #:redis conn (first data))]))
+    process)
 
 (module+ test
   (clear-channels!)
@@ -91,6 +97,12 @@
   (string-append PIPELINE-PREFIX random-part))
 
 (module+ test
+  ;; connections with the same name
+  (define cname (random-message-channel-name))
+  (define c1 (random-message-channel #:channel cname))
+  (define c2 (random-message-channel #:channel cname))
+  (void (c1 "hi"))
+  (check-equal? (c2) "hi")
   (check-true (> (string-length (random-message-channel-name)) 30))
   (check-not-equal? (random-message-channel-name) (random-message-channel-name)))
 
@@ -112,7 +124,7 @@
 (define (receive channel [wait 3]
                  #:redis [conn #f]
                  #:default [default 'empty-channel])
-  (parameterize ([current-redis-connection (or conn (current-redis-connection))])
+  (parameterize ([current-redis-connection conn])
     (define response (BLPOP channel wait))
     (cond [(not response) default]
           [(bytes? (second response)) (bytes->jsexpr (second response))]
