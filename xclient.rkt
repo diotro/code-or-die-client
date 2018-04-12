@@ -8,9 +8,9 @@
 (current-mongo (list "localhost" 27017 "code-or-die-test"))
 
 #;(message-broker-hostnames '(("localhost" 6379)
-                            ("localhost" 6380)
-                            ("localhost" 6381)
-                            ("localhost" 6382)))
+                              ("localhost" 6380)
+                              ("localhost" 6381)
+                              ("localhost" 6382)))
 
 (define PIPELINES
   (list
@@ -27,7 +27,8 @@
    ;; send build orders to each system in the database
    (make-pipeline (every .5 db->system-info)
                   system-info->build-order
-                  (parallel 3 system-order->api))
+                  system-order->api
+                  #;(parallel 3 system-order->api))
 
    ;; extract information on ships, send them to conquer adjacent systems
    (make-pipeline db->ship-info
@@ -47,15 +48,13 @@
   (clear-storage!)
   (clear-channels!)
   (for-each (λ (pipeline) (send pipeline run!)) PIPELINES)
-  (sleep 15)
+  (future
+   (thunk (sleep 60)
+          (clear-channels!)
+          (for-each (λ (pipeline) (send pipeline stop!)) PIPELINES)))
+  )
 
-  (clear-channels!)
-  (for-each (λ (pipeline) (send pipeline stop!)) PIPELINES))
-
-(run!)
-
-
-
+  (run!)
 
 
 
@@ -68,3 +67,7 @@
 
 
 
+
+
+
+  

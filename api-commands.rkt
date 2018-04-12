@@ -48,8 +48,10 @@
      #'(define/contract (name . args) (-> in-contracts ...)
          (DELETE-url (apply format (cons url args))))]))
 
+
 ;; ---------------------------------------------------------------------------------------------------
 ;; The actual API functions
+
 (def-api get-rules GET  "/" () string?)
 (def-api set-api-key POST "/set-api-key" ())
 (def-api get-civ-info GET "/civ-info" () string?)
