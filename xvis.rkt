@@ -22,7 +22,6 @@
               (cons (vector (length prev) (second log)) prev))))
 
 
-
 (define RENDERERS
   (filter identity
           (hash-map LOGS-OVER-TIME
