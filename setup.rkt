@@ -1,8 +1,9 @@
 #lang racket
 
 (require json
-         "components.rkt"
-         "operations.rkt")
+         "operations.rkt"
+         "shared.rkt"
+         "messages.rkt")
 
 (provide
  ; String -> Void
@@ -13,9 +14,9 @@
  ; - 'api-location
  ; - 'persistent-store
  ; - 'message-brokers
- setup)
+ load-config)
 
-(define (setup filename)
+(define (load-config filename)
   (with-input-from-file filename
     (thunk (define CONFIG (read-json))
   

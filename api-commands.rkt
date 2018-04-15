@@ -2,7 +2,8 @@
 
 (provide (all-defined-out))
 (require json
-         net/url)
+         net/url
+         "shared.rkt")
 
 ;; ---------------------------------------------------------------------------------------------------
 ;; Contracts
@@ -19,12 +20,6 @@
 (define ship-order/c (hash/c any/c any/c))
 (define ship-info/c (hash/c any/c any/c))
 
-;; ---------------------------------------------------------------------------------------------------
-;; Parameters
-
-(define current-api-location (make-parameter "http://localhost:80" identity))
-(define current-api-key (make-parameter "" identity))
-(define current-civ-name (make-parameter "" identity))
 
 
 ;; ---------------------------------------------------------------------------------------------------

@@ -13,8 +13,8 @@
  ;; db->"id"
  ;; db->single-"id"
  ;; For each key:
- ;;  - key->retrieve-"id"
- ;;  - key->retrieve-single-"id"
+ ;;  - id->retrieve-"key"
+ ;;  - id->retrieve-single-"key"
  register-collection)
 
 

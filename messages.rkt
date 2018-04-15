@@ -2,10 +2,8 @@
 
 (provide message-broker-hostnames
          message-broker
-         
-         random-message-channel
-         random-message-channel-name
 
+         message-channel
          clear-channels!
          list-all-channels
 
@@ -15,19 +13,17 @@
          )
 
 (require redis
-         json)
+         json
+         "shared.rkt")
 
 (module+ test
   (require rackunit))
 
 
-(define SCHEMA-PREFIX "schema:")
-(define CHANNEL-PREFIX "channel:")
-(define PIPELINE-PREFIX "pipeline-channel:")
-
-
+;; message-broker-hostnames : [parameter? [list String Integer]]
 (define message-broker-hostnames
   (make-parameter '(("localhost" 6379)) identity))
+
 
 ;; -> (list String Integer)
 ;; returns the hostname and port number of a random message broker host
@@ -35,18 +31,17 @@
   (list-ref (message-broker-hostnames)
             (random (length (message-broker-hostnames)))))
 
-
 ;; -> Void
 ;; deletes all data in all message brokers
 (define (clear-channels!)
   (for-each-redis (λ (conn)
-                    (define keys (KEYS (string-append PIPELINE-PREFIX "*") #:rconn conn))
+                    (define keys (KEYS (as-pipeline "*") #:rconn conn))
                     (for-each DEL keys))))
 
 ;; -> [List-of String]
 ;; retusnt the name of each channel in redis
 (define (list-all-channels)
-  (apply append (map-redis (λ (conn) (KEYS (string-append PIPELINE-PREFIX "*"))))))
+  (apply append (map-redis (λ (conn) (KEYS (as-pipeline "*"))))))
 
 
 ;; [RedisConnection -> Void] -> Void
@@ -62,7 +57,6 @@
   (map (λ (host) (op (connect #:host (first host) #:port (second host))))
        (message-broker-hostnames)))
 
-
 (define (queue-length channel)
   (if (string? channel)
       (LLEN channel)
@@ -73,38 +67,23 @@
 ;; returns a function that:
 ;;  - if called on 0 arguments will receive data from that channel
 ;;  - if called on 1 argument will broadcast data to that argument
-(define (random-message-channel #:channel [channel (random-message-channel-name)])
+(define (message-channel pipeline-name channel-name)
   (define host (message-broker))
-    (define conn (connect #:host (first host) #:port (second host)))
-    (define (process . data)
-      (cond
-        [(empty? data) (or (receive channel #:redis conn #:default #f) (values))]
-        [(empty? (rest data)) (broadcast channel #:redis conn (first data))]))
-    process)
+  (define conn (connect #:host (first host) #:port (second host)))
+  (define channel (string-append PIPELINE-PREFIX pipeline-name ":" channel-name))
+  (define (process . data)
+    (cond
+      [(empty? data) (or (receive channel #:redis conn #:default #f) (values))]
+      [(empty? (rest data)) (broadcast channel #:redis conn (first data))]))
+  process)
 
 (module+ test
   (clear-channels!)
-  (define c (random-message-channel))
+  (define c (message-channel "a" "b"))
   (void (c "hi"))
   (check-equal? (c) "hi")
   (clear-channels!))
 
-;; -> String
-;; produces the name of a random redis channel that is not in use
-(define (random-message-channel-name)
-  (define (random-char _) (integer->char (random 97 123)))
-  (define random-part (apply string (build-list 30 random-char)))
-  (string-append PIPELINE-PREFIX random-part))
-
-(module+ test
-  ;; connections with the same name
-  (define cname (random-message-channel-name))
-  (define c1 (random-message-channel #:channel cname))
-  (define c2 (random-message-channel #:channel cname))
-  (void (c1 "hi"))
-  (check-equal? (c2) "hi")
-  (check-true (> (string-length (random-message-channel-name)) 30))
-  (check-not-equal? (random-message-channel-name) (random-message-channel-name)))
 
 ;;--------------------------------------------------------------------------------------------------
 ;; Messages
@@ -113,8 +92,6 @@
 ;; Puts the given data in the given channel
 (define (broadcast channel data #:redis [conn (current-redis-connection)])
   (parameterize ([current-redis-connection conn])
-    ;; TODO [ ] schema
-    #;(ensure-meets-schema channel data)
     (RPUSH channel (jsexpr->string data))))
 
 

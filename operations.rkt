@@ -3,15 +3,13 @@
 
 (require "api-commands.rkt"
          "storage.rkt"
-         "messages.rkt")
+         "messages.rkt"
+         "shared.rkt")
 (module+ test
   (require rackunit))
 
 (provide clear-storage!
-         current-mongo
-         current-api-key
-         current-api-location
-         current-civ-name)
+         current-mongo)
 
 
 ;; ---------------------------------------------------------------------------------------------------
@@ -137,6 +135,8 @@
   (apply values (map (λ (h) (hash-ref h 'id)) (get-ships))))
 
 
+;; ---------------------------------------------------------------------------------------------------
+;; Intermediate steps
 
 ;; Integer -> System
 ;; finds all available informatino on the given system
