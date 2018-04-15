@@ -1,0 +1,10 @@
+{
+    "api-key": "one",
+    "api-location": "http://localhost:80",
+    "civ-name": "one",
+    "persistent-store": ["localhost", 27017, "code-or-die"],
+    "message-brokers": [
+        ["localhost", 6379]
+    ]
+}
+

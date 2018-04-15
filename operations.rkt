@@ -111,8 +111,11 @@
 ;; ->log-> : String [X -> Y] -> [X -> Y]
 ;; logs the input to the given channel, then applies the function
 (define (->log-> c [func identity])
-  (procedure-rename (λ input (broadcast c input) (apply func input))
+  (procedure-rename (λ input
+                      (map (curry broadcast c) input)
+                      (apply func input))
                     (string->symbol (string-append "log:" c))))
+
 
 ;; procedure? procedure? -> procedure?
 ;; gives the second function the name of the first function
@@ -165,22 +168,22 @@
 (define (ship-info->system-info ship-info)
   (define s (id->retrieve-single-system-info (hash-ref ship-info 'location)))
   (if s s (values)))
-  
-
 
 ;; System -> [List-of Route]
-;; literally just extracts the key routes from the given system
+;; creates the routes for the given system
 (define (system-info->routes system-info)
-  (hash-ref system-info 'routes))
+  (map (λ (h) (hash-set h 'origin (hash-ref system-info 'id)))
+              (hash-ref system-info 'routes)))
+
 
 ;; [List-of Route] -> [List-of Route]
 ;; keeps only the routes not owned by me
 (define (routes->routes-not-owned routes)
   (filter (λ (r)
             (define sys (id->retrieve-single-system-info (hash-ref r 'destination)))
-            (if (not sys) #t
-                (and (string? (hash-ref sys 'controller))
-                     (not (string=? (hash-ref sys 'controller) (current-civ-name))))))
+            (and sys
+                 (string? (hash-ref sys 'controller))
+                 (not (string=? (hash-ref sys 'controller) (current-civ-name)))))
           routes))
 
 
@@ -198,20 +201,20 @@
               (list (hash 'target target) (list move-order seize-order))]))
 
 
-;; ---------------------------------------------------------------------------------------------------
-;; DB Operations
-
-(register-collection system-info id [armies routes])
-(register-collection ship-info id [])
-(register-collection conquer-attempt target [])
-
-
 (define (system-info->build-order system-info)
   (hasheq 'id (hash-ref system-info 'id)
           'civ (current-civ-name)
           'order "build"
           'count (hash-ref system-info 'production)))
 
+
+;; ---------------------------------------------------------------------------------------------------
+;; DB Operations
+
+(register-collection system-info id [armies routes])
+(register-collection ship-info id [])
+(register-collection conquer-attempt target [])
+(register-collection routes id [origin destination length])
 
 ;; ---------------------------------------------------------------------------------------------------
 ;; Outward bound API requests

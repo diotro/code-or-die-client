@@ -34,7 +34,15 @@
                                  (string? (third mongo)))
                       (raise-argument-error
                        'mongo "(list hostname port db-name)" mongo))
-                    mongo)))
+                    (current-mongo-conn
+                     (create-mongo #:host (first (current-mongo))
+                                   #:port (second (current-mongo))))
+                  mongo)
+                  ))
+
+(define current-mongo-conn
+  (make-parameter (create-mongo #:host (first (current-mongo))
+                                #:port (second (current-mongo))) identity))
 
 
 
@@ -55,8 +63,8 @@
                   (define (db->single-id id) (find-single-stored c id))
                   #,@(map (λ (x) #`(define #,(make-id "~a->retrieve-~a" x #'coll)
                                      (λ (v) (apply values
-                                                 (sequence->list
-                                                  (find-stored-by c '#,x v))))))
+                                                   (sequence->list
+                                                    (find-stored-by c '#,x v))))))
                           (cons #'pk (syntax->list #'(keys ...))))
                   #,@(map (λ (x) #`(define #,(make-id "~a->retrieve-single-~a" x #'coll)
                                      (curry find-single-stored-by c '#,x)))
@@ -99,9 +107,9 @@
      collection
      (λ (coll)
        (with-handlers ([exn:fail? (λ (x) empty-stream)])
-       (mongo-collection-find coll query
-                              ; don't include _id field
-                              #:selector (hash '_id 0))))))
+         (mongo-collection-find coll query
+                                ; don't include _id field
+                                #:selector (hash '_id 0))))))
   
   (define (hash-vec->list h)
     (for/fold ([out (hash)])
@@ -153,9 +161,7 @@
 ;; call-with-mongo : [X] [MongoDB -> X] -> X
 ;; calls the given function on the current mongo db
 (define (call-with-mongo f)
-  (define mongo (create-mongo #:host (first (current-mongo))
-                              #:port (second (current-mongo))))
-  (define db (mongo-db mongo (third (current-mongo))))
+  (define db (mongo-db (current-mongo-conn) (third (current-mongo))))
   
   (define out-cursor (f db))
   (cond [(void? out-cursor) (void)]
