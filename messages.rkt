@@ -9,6 +9,7 @@
 
          broadcast
          receive
+	 channel-name-for
          queue-length
          )
 
@@ -58,9 +59,9 @@
        (message-broker-hostnames)))
 
 (define (queue-length channel)
-  (if (string? channel)
-      (LLEN channel)
-      (void)))
+  (if (procedure? channel)
+      (void)
+      (LLEN channel)))
 
 ;; [#:channel String] -> [ -> ]
 ;; given a channel name (or generating one randomly),
@@ -70,7 +71,7 @@
 (define (message-channel pipeline-name channel-name)
   (define host (message-broker))
   (define conn (connect #:host (first host) #:port (second host)))
-  (define channel (string-append PIPELINE-PREFIX pipeline-name ":" channel-name))
+  (define channel (channel-name-for pipeline-name channel-name))
   (define (process . data)
     (cond
       [(empty? data) (or (receive channel #:redis conn #:default #f) (values))]
@@ -83,6 +84,9 @@
   (void (c "hi"))
   (check-equal? (c) "hi")
   (clear-channels!))
+
+(define (channel-name-for pipeline-name channel-name)
+  (string-append PIPELINE-PREFIX pipeline-name ":" channel-name)) 
 
 
 ;;--------------------------------------------------------------------------------------------------

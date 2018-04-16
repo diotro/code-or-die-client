@@ -47,7 +47,7 @@
 
 (define (run!)
   (clear-storage!)
-  (clear-channels!)
+  ;(clear-channels!)
   (for-each (λ (pipeline) (send pipeline run!)) PIPELINES)
   (sleep 10)
   (for-each (λ (pipeline) (send pipeline stop!)) PIPELINES))

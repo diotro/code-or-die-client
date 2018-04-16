@@ -181,10 +181,14 @@
 
       (cwv input (λ data (for-each process data)))
 
-      (define count (queue-length input-channel))
-      (define op-name (with-output-to-string (thunk (display operation))))
-      (when (and (number? count) op-name)
-	(void (broadcast LOGGING-CHANNEL (string-append input-channel "\t" (number->string count))))))
+      (unless (procedure? input-channel) 
+	(define count (queue-length (apply channel-name-for input-channel)))
+      (when (and (number? count))
+		 (void (broadcast (string-append
+				    LOGGING-CHANNEL ":"
+				    (first input-channel) ":" 
+						 (second input-channel))
+				  count)))))
     ))
 
 

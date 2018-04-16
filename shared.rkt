@@ -23,4 +23,4 @@
 (define PIPELINE-PREFIX "pipeline:")
 (define as-pipeline (curry string-append PIPELINE-PREFIX))
 
-(define LOGGING-CHANNEL "pipelogs")
+(define LOGGING-CHANNEL "logs")
