@@ -17,5 +17,6 @@
             (lines (map vector (build-list (length counts) add1) counts)))))
     
 
-(map (λ (r) (plot (second r) #:title (first r))) (sort renderers string<? q#:key first))
+(map (λ (r) (plot (second r) #:title (first r)))
+     (sort renderers string<? #:key first))
 
