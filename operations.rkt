@@ -144,7 +144,13 @@
   (define detail (get-system-info system))
   (if (symbol? detail) (values) detail))
 
-
+;; System -> Boolean
+;; does the given system have less than ten orders?
+(define (system-less-than-ten-orders? system)
+  (and (hash? system) 
+       #;(hash-has-key? system 'orders)
+       #;(< (length (hash-ref system 'orders)) 10)
+       ))
 
 ;; Integer -> Ship
 ;; finds all information on the given ship from the api

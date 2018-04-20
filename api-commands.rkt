@@ -29,7 +29,7 @@
 (define-syntax (def-api stx)
   (syntax-case stx (GET PUT POST DELETE)
     [(_ name GET url (in-contracts ...) out-contract)
-     #'(define/contract (name . args) (-> in-contracts ... out-contract)
+     #'(define/contract (name . args) (-> in-contracts ... (or/c 'null out-contract))
          (GET-url (apply format (cons url args))))]
     [(_ name PUT url (in-contracts ...))
      #'(define/contract (name . args) (-> in-contracts ... any/c)

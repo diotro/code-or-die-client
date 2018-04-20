@@ -5,13 +5,13 @@
 ;; Parameters
 
 ;; current-api-location : [parameter? String]
-(define current-api-location (make-parameter "http://localhost:80" identity))
+(define current-api-location (make-parameter "http://localhost:80"))
 
 ;; current-api-key : [parameter? String]
-(define current-api-key (make-parameter "" identity))
+(define current-api-key (make-parameter ""))
 
 ;; current-civ-name : [parameter? String]
-(define current-civ-name (make-parameter "" identity))
+(define current-civ-name (make-parameter ""))
 
 
 ;; ---------------------------------------------------------------------------------------------------

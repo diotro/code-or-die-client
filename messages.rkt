@@ -1,21 +1,20 @@
 #lang racket
 
 (provide message-broker-hostnames
-         message-broker
+	 message-broker
 
-         message-channel
-         clear-channels!
-         list-all-channels
+	 message-channel
+	 clear-channels!
 
-         broadcast
-         receive
-	 channel-name-for
-         queue-length
-         )
+	 broadcast
+	 receive
+	 channel-name
+	 channel-size 
+	 )
 
 (require redis
-         json
-         "shared.rkt")
+	 json
+	 "shared.rkt")
 
 (module+ test
   (require rackunit))
@@ -30,26 +29,21 @@
 ;; returns the hostname and port number of a random message broker host
 (define (message-broker)
   (list-ref (message-broker-hostnames)
-            (random (length (message-broker-hostnames)))))
+	    (random (length (message-broker-hostnames)))))
 
 ;; -> Void
 ;; deletes all data in all message brokers
 (define (clear-channels!)
   (for-each-redis (λ (conn)
-                    (define keys (KEYS (as-pipeline "*") #:rconn conn))
-                    (for-each DEL keys))))
-
-;; -> [List-of String]
-;; retusnt the name of each channel in redis
-(define (list-all-channels)
-  (apply append (map-redis (λ (conn) (KEYS (as-pipeline "*"))))))
+		     (define keys (KEYS (as-pipeline "*") #:rconn conn))
+		     (for-each DEL keys))))
 
 
 ;; [RedisConnection -> Void] -> Void
 ;; applies the given function to each message broker
 (define (for-each-redis op)
   (for-each (λ (host) (op (connect #:host (first host) #:port (second host))))
-            (message-broker-hostnames)))
+	    (message-broker-hostnames)))
 
 
 ;; [X] [RedisConnection -> X] -> [List-of X]
@@ -58,20 +52,22 @@
   (map (λ (host) (op (connect #:host (first host) #:port (second host))))
        (message-broker-hostnames)))
 
-(define (queue-length channel)
-  (if (procedure? channel)
-      (void)
-      (LLEN channel)))
 
-;; [#:channel String] -> [ -> ]
+;; [Or String Any] -> [Either Number Void]
+;; how long is the given channel? Returns void if the argument is not a string 
+(define (channel-size channel)
+  (if (string? channel)
+    (LLEN channel)
+    (void)))
+
+;; String String -> [ -> ]
 ;; given a channel name (or generating one randomly),
 ;; returns a function that:
 ;;  - if called on 0 arguments will receive data from that channel
 ;;  - if called on 1 argument will broadcast data to that argument
-(define (message-channel pipeline-name channel-name)
-  (define host (message-broker))
+(define (message-channel pipeline-name chan-name host)
   (define conn (connect #:host (first host) #:port (second host)))
-  (define channel (channel-name-for pipeline-name channel-name))
+  (define channel (channel-name pipeline-name chan-name))
   (define (process . data)
     (cond
       [(empty? data) (or (receive channel #:redis conn #:default #f) (values))]
@@ -85,11 +81,10 @@
   (check-equal? (c) "hi")
   (clear-channels!))
 
-(define (channel-name-for pipeline-name channel-name)
-  (string-append PIPELINE-PREFIX pipeline-name ":" channel-name)) 
+(define (channel-name pipeline channel)
+  (string-append PIPELINE-PREFIX pipeline ":" channel)) 
 
-
-;;--------------------------------------------------------------------------------------------------
+;; -------------------------------------------------------------------------------------------------- 
 ;; Messages
 
 ;; broadcast : String JSExpr -> Integer
@@ -103,13 +98,13 @@
 ;; returns a jsexpr if there is one. Blocks for the given wait time,
 ;; or three seconds if none is provided
 (define (receive channel [wait 3]
-                 #:redis [conn #f]
-                 #:default [default 'empty-channel])
+		 #:redis [conn #f]
+		 #:default [default 'empty-channel])
   (parameterize ([current-redis-connection conn])
     (define response (BLPOP channel wait))
     (cond [(not response) default]
-          [(bytes? (second response)) (bytes->jsexpr (second response))]
-          [else (format "invalid message in channel ~a" (bytes->string/utf-8 response))])))
+	  [(bytes? (second response)) (bytes->jsexpr (second response))]
+	  [else (format "invalid message in channel ~a" (bytes->string/utf-8 response))])))
 
 (module+ test
   (clear-channels!)
