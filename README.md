@@ -1,8 +1,8 @@
-# Code or Die Client
+Code or Die Client
 
 To read this code:
 
-Start with components.rkt and messages.rkt. components.rkt provides the function `make-pipelines`,
+Start with `components.rkt`. components.rkt provides the function `make-pipeline`,
 which accepts a list of functions. The first function must take no input and produce some number
 of values. Then, for each following function, the values produced by the previous function
 are given as inputs, and each value output by the current function is passed to the next one.
@@ -15,13 +15,13 @@ This process repeats until you hit the last function, which does not produce any
 use of this framework for the code-or-die client, the final functions do side-effectful operations,
 such as storing data in a database or sending PUT, POST, or DELETE requests to the API. 
 
-xclient.rkt will run the client, including a visualization of each pipeline. 
+`xclient.rkt` will run the client, including a visualization of each pipeline. 
 
-storage.rkt provides utilities to store data into a mongo database, including a macro to register
-a collection (named, hopefully unsurprisingly, `register-collection`, providing functions to
+`storage.rkt` provides utilities to store data into a mongo database, including a macro to register
+a collection (named, hopefully unsurprisingly, `register-collection`), providing functions to
 store and retrieve data in that collection.
 
-messages.rkt implements message-passing, allowing the clients to talk to each other. It
+`messages.rkt` implements message-passing, allowing the clients to talk to each other. It
 allows support for multiple redis servers (although the interface does not need to know
 which message passing database is being used under the hood) with a paramater. Whenever
 a new message channel is spun up, it is chosen randomly from the `message-broker-hostnames`.
