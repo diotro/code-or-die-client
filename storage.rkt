@@ -7,11 +7,11 @@
  ;; clear-storage : -> Void
  clear-storage!
  
- ;; (register-collection id pk [id ....])
+ ;; (register-collection name pk [key ....])
  ;; registers the first collection, with accompanying functions:
- ;; "id"->db
- ;; db->"id"
- ;; db->single-"id"
+ ;; ${name}->db
+ ;; db->${name}
+ ;; db->single-${name}
  ;; For each key:
  ;;  - id->retrieve-"key"
  ;;  - id->retrieve-single-"key"
@@ -23,7 +23,7 @@
   (require rackunit))
 
 
-;; [Parameter (list String Number String)]
+;; current-mongo : [Parameter (list String Number String)]
 (define current-mongo
   (make-parameter (list "localhost" 27017 "code-or-die-test")
                   (λ (mongo)
@@ -37,7 +37,7 @@
                     (current-mongo-conn
                      (create-mongo #:host (first (current-mongo))
                                    #:port (second (current-mongo))))
-                  mongo)
+                    mongo)
                   ))
 
 (define current-mongo-conn
@@ -57,7 +57,12 @@
                      [db->id (make-id "db->~a" #'coll)]
                      [db->single-id (make-id "db->single-~a" #'coll)]
                      )
-         #`(begin (define (id->db value) (store! c #'pk value))
+         #`(begin (define (id->db value)
+                    (for-each (λ (k)
+                                (unless (hash-has-key? value k)
+                                  (raise (exn:fail (format "value ~a missing key ~a" value k)))))
+                              (syntax->datum #'(keys ...)))
+                    (store! c #'pk value))
                   (define (db->id)
                     (apply values (sequence->list (find-stored c))))
                   (define (db->single-id id) (find-single-stored c id))
@@ -80,13 +85,24 @@
   (c->db (hash 'id 3))
   (check-equal? (first (call-with-values db->c list)) (hash 'id 3))
   (define c1 (id->retrieve-c 3))
-  (check-equal? c1 (hash 'id 3)))
+  (check-equal? c1 (hash 'id 3))
+
+  (clear-storage!)
+  ; should create a dict that must have field1, field2, and field3 on insert
+  (register-collection dict dict-id [field1 field2 field3])
+  (define SAMPLE-DICT (hash 'dict-id 1 'field1 1 'field2 '(1 2 3) 'field3 (hash 'a 3)))
+  (dict->db SAMPLE-DICT)
+  (check-equal? (first (call-with-values db->dict list)) SAMPLE-DICT)
+
+  ; should fail on dict missing field
+  (define DICT-MISSING-FIELD-2 (hash-remove SAMPLE-DICT 'field2))
+  (check-exn exn? (thunk (dict->db DICT-MISSING-FIELD-2)))
+  )
 
 ;; -> Void
 ;; clears the current database
 (define (clear-storage!)
   (call-with-mongo! mongo-db-drop))
-
 
 
 ;; store! : String Symbol BSONDocument -> Void
